@@ -1,47 +1,46 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request
 from binance.client import Client
-from dotenv import load_dotenv
 import os
-
-load_dotenv()
-api_key = os.getenv("BINANCE_API_KEY")
-api_secret = os.getenv("BINANCE_API_SECRET")
-client = Client(api_key, api_secret, testnet=True)
 
 app = Flask(__name__)
 
-@app.route('/webhook', methods=['POST'])
+# Získání API klíčů z Render proměnných
+api_key = os.environ.get("BINANCE_API_KEY")
+api_secret = os.environ.get("BINANCE_API_SECRET")
+
+# Nastavení testnet klienta
+client = Client(api_key, api_secret, testnet=True)
+
+@app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
-    print("📩 Přijatý signál:", data)
+    print("Přijatý požadavek:", data)
 
     action = data.get("action")
-    symbol = data.get("symbol", "ETHUSDT")
-    quantity = data.get("quantity", 0.01)
+    symbol = data.get("symbol")
+    quantity = float(data.get("quantity"))
 
-    if action == "buy":
-        order = client.futures_create_order(
-            symbol=symbol,
-            side='BUY',
-            type='MARKET',
-            quantity=quantity
-        )
-        print("✅ BUY objednávka:", order)
-        return jsonify({"status": "Buy order sent", "order": order})
+    try:
+        if action == "buy":
+            order = client.futures_create_order(
+                symbol=symbol,
+                side="BUY",
+                type="MARKET",
+                quantity=quantity
+            )
+        elif action == "sell":
+            order = client.futures_create_order(
+                symbol=symbol,
+                side="SELL",
+                type="MARKET",
+                quantity=quantity
+            )
+        else:
+            return {"error": "Neznámá akce"}, 400
 
-    elif action == "sell":
-        order = client.futures_create_order(
-            symbol=symbol,
-            side='SELL',
-            type='MARKET',
-            quantity=quantity
-        )
-        print("✅ SELL objednávka:", order)
-        return jsonify({"status": "Sell order sent", "order": order})
+        return {"status": "úspěch", "order": order}, 200
 
-    else:
-        return jsonify({"error": "Invalid action"}), 400
-
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=10000)
+    except Exception as e:
+        print("Chyba při obchodování:", str(e))
+        return {"error": str(e)}, 500
 
